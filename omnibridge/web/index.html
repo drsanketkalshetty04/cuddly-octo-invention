@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OmniBridge</title>
+<style>
+  :root { --bg:#0f1115; --panel:#181b22; --line:#2a2f3a; --fg:#e7e9ee; --dim:#9aa3b2; --acc:#4cc2ff; --bad:#ff6b6b; }
+  @media (prefers-color-scheme: light) { :root { --bg:#f5f6f8; --panel:#fff; --line:#dfe3ea; --fg:#14171c; --dim:#5b6472; --acc:#0a7cc2; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:2; }
+  header h1 { font-size:18px; margin:0; } header .meta { color:var(--dim); font-size:13px; margin-left:auto; text-align:right; }
+  nav { display:flex; gap:4px; padding:8px 16px; border-bottom:1px solid var(--line); overflow-x:auto; }
+  nav button { background:none; border:0; color:var(--dim); padding:8px 12px; border-radius:8px; font:inherit; cursor:pointer; white-space:nowrap; }
+  nav button.on { background:var(--panel); color:var(--fg); }
+  main { max-width:960px; margin:0 auto; padding:16px; }
+  section { display:none; } section.on { display:block; }
+  .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }
+  .btn { background:var(--acc); color:#fff; border:0; padding:8px 14px; border-radius:8px; font:inherit; cursor:pointer; }
+  .btn.ghost { background:var(--panel); color:var(--fg); border:1px solid var(--line); }
+  .crumbs a { color:var(--acc); cursor:pointer; text-decoration:none; }
+  .list { background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .row { display:flex; align-items:center; gap:10px; padding:10px 12px; border-top:1px solid var(--line); }
+  .row:first-child { border-top:0; }
+  .row .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+  .row .size { color:var(--dim); font-size:13px; }
+  .row .acts button { background:none; border:0; color:var(--dim); cursor:pointer; padding:4px 6px; font:inherit; }
+  .drop { border:2px dashed var(--line); border-radius:10px; padding:18px; text-align:center; color:var(--dim); margin-bottom:12px; }
+  .drop.hot { border-color:var(--acc); color:var(--acc); }
+  .prog { height:4px; background:var(--line); border-radius:2px; margin-top:8px; overflow:hidden; display:none; }
+  .prog i { display:block; height:100%; width:0; background:var(--acc); }
+  textarea, input[type=text] { width:100%; background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:10px; font:inherit; }
+  .clip { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-top:8px; }
+  .clip pre { margin:0 0 6px; white-space:pre-wrap; word-break:break-word; font:inherit; }
+  .clip small { color:var(--dim); }
+  .term { background:#0a0c10; color:#d6dde8; border-radius:10px; padding:12px; font:13px/1.4 ui-monospace, Menlo, Consolas, monospace; height:55vh; overflow:auto; white-space:pre-wrap; word-break:break-all; }
+  .term .cmd { color:#4cc2ff; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:10px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; }
+  .card b { display:block; } .card span { color:var(--dim); font-size:13px; }
+  .toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:var(--panel); border:1px solid var(--line); padding:10px 16px; border-radius:8px; display:none; }
+  .err { color:var(--bad); }
+</style>
+</head>
+<body>
+<header><h1>OmniBridge</h1><div class="meta" id="meta">connecting…</div></header>
+<nav>
+  <button data-tab="files" class="on">Files</button>
+  <button data-tab="clip">Shared clipboard</button>
+  <button data-tab="devices">Devices</button>
+  <button data-tab="term">Terminal</button>
+</nav>
+<main>
+  <section id="files" class="on">
+    <div class="drop" id="drop">Drop files here or <button class="btn" id="pick">Choose files</button>
+      <input type="file" id="fileIn" multiple hidden>
+      <div class="prog" id="prog"><i></i></div><div id="upmsg"></div>
+    </div>
+    <div class="bar">
+      <div class="crumbs" id="crumbs"></div>
+      <span style="flex:1"></span>
+      <button class="btn ghost" id="newdir">New folder</button>
+      <button class="btn ghost" id="zipdir">Download folder (.zip)</button>
+    </div>
+    <div class="list" id="list"></div>
+  </section>
+
+  <section id="clip">
+    <textarea id="clipIn" rows="3" placeholder="Type or paste text or a link; it appears on every connected device"></textarea>
+    <div class="bar" style="margin-top:8px"><button class="btn" id="clipSend">Send to all devices</button></div>
+    <div id="clips"></div>
+  </section>
+
+  <section id="devices">
+    <h3>Connected devices</h3><div class="cards" id="devs"></div>
+    <h3>Other OmniBridge hubs on this network</h3><div class="cards" id="peers"></div>
+  </section>
+
+  <section id="term">
+    <div class="term" id="termOut"></div>
+    <form id="termForm" class="bar" style="margin-top:8px"><input type="text" id="termIn" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="command"></form>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = n => n < 1024 ? n + ' B' : n < 1048576 ? (n/1024).toFixed(1) + ' KB' : n < 1073741824 ? (n/1048576).toFixed(1) + ' MB' : (n/1073741824).toFixed(2) + ' GB';
+const q = p => encodeURIComponent(p);
+let cwd = '', info = {}, termCwd = '';
+
+function toast(msg, bad) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (bad ? ' err' : ''); t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 2500); }
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { credentials: 'same-origin', ...opts });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || r.statusText);
+  return d;
+}
+const post = (path, body) => api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button, section').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); $('#' + b.dataset.tab).classList.add('on');
+  if (b.dataset.tab === 'term') $('#termIn').focus();
+});
+
+// ---------- files ----------
+async function load(path = cwd) {
+  try {
+    const d = await api('/api/list?path=' + q(path));
+    cwd = d.path;
+    const parts = cwd ? cwd.split('/') : [];
+    $('#crumbs').innerHTML = '<a data-p="">Home</a>' + parts.map((p, i) => ' / <a data-p="' + esc(parts.slice(0, i + 1).join('/')) + '">' + esc(p) + '</a>').join('');
+    $('#crumbs').querySelectorAll('a').forEach(a => a.onclick = () => load(a.dataset.p));
+    $('#list').innerHTML = d.items.length ? '' : '<div class="row" style="color:var(--dim)">This folder is empty. Drop files above to share them.</div>';
+    for (const it of d.items) {
+      const row = document.createElement('div'); row.className = 'row';
+      row.innerHTML = `<span>${it.dir ? '📁' : '📄'}</span><span class="name">${esc(it.name)}</span><span class="size">${it.dir ? '' : fmt(it.size)}</span>
+        <span class="acts"><button data-a="ren">Rename</button><button data-a="del">Delete</button></span>`;
+      row.querySelector('.name').onclick = () => it.dir ? load(it.path) : window.open('/api/download?path=' + q(it.path) + '&inline=1');
+      row.querySelector('[data-a=ren]').onclick = async () => {
+        const n = prompt('New name', it.name); if (!n || n === it.name) return;
+        try { await post('/api/rename', { path: it.path, name: n }); load(); } catch (e) { toast(e.message, 1); }
+      };
+      row.querySelector('[data-a=del]').onclick = async () => {
+        if (!confirm('Delete ' + it.name + '?')) return;
+        try { await post('/api/delete', { path: it.path }); load(); } catch (e) { toast(e.message, 1); }
+      };
+      if (!it.dir) {
+        const dl = document.createElement('button'); dl.textContent = 'Download';
+        dl.onclick = () => { location.href = '/api/download?path=' + q(it.path); };
+        row.querySelector('.acts').prepend(dl);
+      }
+      $('#list').append(row);
+    }
+  } catch (e) { $('#list').innerHTML = '<div class="row err">' + esc(e.message) + '</div>'; }
+}
+
+function upload(files) {
+  files = [...files]; if (!files.length) return;
+  const total = files.reduce((a, f) => a + f.size, 0); let done = 0, i = 0;
+  const bar = $('#prog'); bar.style.display = 'block';
+  const next = () => {
+    if (i >= files.length) { bar.style.display = 'none'; $('#upmsg').textContent = `Uploaded ${files.length} file(s)`; load(); return; }
+    const f = files[i++], x = new XMLHttpRequest();
+    x.open('PUT', '/api/upload?path=' + q(cwd) + '&name=' + q(f.name));
+    x.upload.onprogress = e => { bar.firstChild.style.width = (100 * (done + e.loaded) / Math.max(total, 1)) + '%'; $('#upmsg').textContent = `Uploading ${f.name}…`; };
+    x.onload = () => { if (x.status >= 300) toast('Upload failed: ' + f.name, 1); done += f.size; next(); };
+    x.onerror = () => { toast('Upload failed: ' + f.name, 1); done += f.size; next(); };
+    x.send(f);
+  };
+  next();
+}
+$('#pick').onclick = () => $('#fileIn').click();
+$('#fileIn').onchange = e => { upload(e.target.files); e.target.value = ''; };
+const drop = $('#drop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('hot'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('hot'); }));
+drop.addEventListener('drop', e => upload(e.dataTransfer.files));
+$('#newdir').onclick = async () => { const n = prompt('Folder name'); if (!n) return; try { await post('/api/mkdir', { path: cwd, name: n }); load(); } catch (e) { toast(e.message, 1); } };
+$('#zipdir').onclick = () => { location.href = '/api/zip?path=' + q(cwd); };
+
+// ---------- clipboard ----------
+let clipSig = '';
+async function loadClips() {
+  try {
+    const d = await api('/api/clips'); const sig = d.clips.map(c => c.id).join();
+    if (sig === clipSig) return; clipSig = sig;
+    $('#clips').innerHTML = d.clips.slice().reverse().map(c => `<div class="clip"><pre>${esc(c.text)}</pre>
+      <small>from ${esc(c.from)} · ${new Date(c.time * 1000).toLocaleTimeString()}</small>
+      <button class="btn ghost" style="float:right;padding:2px 10px" data-t="${esc(c.text)}">Copy</button></div>`).join('') || '<p style="color:var(--dim)">Nothing shared yet.</p>';
+    $('#clips').querySelectorAll('button').forEach(b => b.onclick = async () => {
+      try { await navigator.clipboard.writeText(b.dataset.t); toast('Copied'); } catch { toast('Copy blocked by browser: select the text instead', 1); }
+    });
+  } catch {}
+}
+$('#clipSend').onclick = async () => {
+  const t = $('#clipIn').value.trim(); if (!t) return;
+  try { await post('/api/clips', { text: t }); $('#clipIn').value = ''; loadClips(); toast('Sent to all devices'); } catch (e) { toast(e.message, 1); }
+};
+
+// ---------- devices ----------
+async function loadInfo() {
+  try {
+    info = await api('/api/info');
+    $('#meta').innerHTML = esc(info.name) + ' · ' + esc(info.os) + '<br>' + esc(info.root);
+    $('#devs').innerHTML = info.devices.map(d => `<div class="card"><b>${esc(d.name)}${d.ip === info.you ? ' (this device)' : ''}</b><span>${esc(d.ip)}</span></div>`).join('');
+    $('#peers').innerHTML = info.peers.map(p => `<div class="card"><b>${esc(p.name)}</b><span>${esc(p.url)}</span><br><span>Open it with the link that hub printed.</span></div>`).join('') || '<p style="color:var(--dim)">None found. Start OmniBridge on another computer on the same Wi-Fi.</p>';
+    if (!termCwd) termCwd = info.root;
+  } catch (e) { $('#meta').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; }
+}
+
+// ---------- terminal ----------
+const out = $('#termOut'), hist = []; let hi = 0;
+function tprint(html) { out.insertAdjacentHTML('beforeend', html); out.scrollTop = out.scrollHeight; }
+$('#termForm').onsubmit = async e => {
+  e.preventDefault();
+  const cmd = $('#termIn').value; if (!cmd.trim()) return;
+  hist.push(cmd); hi = hist.length; $('#termIn').value = '';
+  tprint(`<span class="cmd">${esc(termCwd)} $ ${esc(cmd)}</span>\n`);
+  if (cmd === 'clear') { out.innerHTML = ''; return; }
+  try { const d = await post('/api/exec', { cmd, cwd: termCwd }); termCwd = d.cwd; tprint(esc(d.output)); }
+  catch (er) { tprint(`<span class="err">${esc(er.message)}</span>\n`); }
+};
+$('#termIn').onkeydown = e => {
+  if (e.key === 'ArrowUp' && hi > 0) { $('#termIn').value = hist[--hi]; e.preventDefault(); }
+  if (e.key === 'ArrowDown') { hi = Math.min(hist.length, hi + 1); $('#termIn').value = hist[hi] || ''; e.preventDefault(); }
+};
+
+load(); loadInfo(); loadClips();
+setInterval(loadClips, 2000); setInterval(loadInfo, 5000);
+</script>
+</body>
+</html>
