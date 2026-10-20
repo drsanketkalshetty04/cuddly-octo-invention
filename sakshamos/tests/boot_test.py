@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Boot OmniOS in QEMU, drive the shell over the serial port, check the results."""
+"""Boot Saksham OS in QEMU, drive the shell over the serial port, check the results."""
 import os
 import re
 import select
@@ -7,7 +7,7 @@ import subprocess
 import sys
 import time
 
-ISO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "omnios.iso")
+ISO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "sakshamos.iso")
 ANSI = re.compile(rb"\x1b\[[0-9;]*[A-Za-z]")
 
 
@@ -59,13 +59,13 @@ def main():
         print(f"ok   {name}")
         passed += 1
 
-    out = vm.expect(r"omni@omnios:~\$ $", timeout=60)
-    check("boots to shell prompt", "OmniFS mounted" in out and "Welcome to OmniOS" in out, out)
+    out = vm.expect(r"saksham@sakshamos:~\$ $", timeout=60)
+    check("boots to shell prompt", "SakshamFS mounted" in out and "Welcome to Saksham OS" in out, out)
 
     out = vm.run("whoami")
-    check("starts as normal user", "omni" in out, out)
+    check("starts as normal user", "saksham" in out, out)
     out = vm.run("sysinfo")
-    check("sysinfo", "OmniOS 0.1.0" in out and "Memory:" in out, out)
+    check("sysinfo", "Saksham OS 0.1.0" in out and "Memory:" in out, out)
     out = vm.run("echo hello world > greet.txt; cat greet.txt")
     check("redirection + chaining", "hello world" in out, out)
     out = vm.run("echo second line >> greet.txt; wc greet.txt")
@@ -88,13 +88,13 @@ def main():
     out = vm.run("useradd alice pw123", prompt=r"# $")
     check("useradd", "created user alice" in out, out)
     out = vm.run("ls -l /home", prompt=r"# $")
-    check("ls -l shows owners", "alice" in out and "omni" in out, out)
+    check("ls -l shows owners", "alice" in out and "saksham" in out, out)
     out = vm.run("exit")
-    check("exit back to omni", "logout" in out, out)
+    check("exit back to saksham", "logout" in out, out)
 
     vm.send("sudo shutdown")
-    vm.expect(r"Password for omni: $")
-    vm.send("omni")
+    vm.expect(r"Password for saksham: $")
+    vm.send("saksham")
     vm.expect(r"Goodbye")
     try:
         vm.p.wait(timeout=15)

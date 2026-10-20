@@ -1,13 +1,13 @@
-/* OmniOS kernel - shared declarations. */
-#ifndef OMNIOS_H
-#define OMNIOS_H
+/* Saksham OS kernel - shared declarations. */
+#ifndef SAKSHAM_H
+#define SAKSHAM_H
 
 #include <stdint.h>
 #include <stddef.h>
 #include <stdarg.h>
 
-#define OMNIOS_NAME    "OmniOS"
-#define OMNIOS_VERSION "0.1.0"
+#define SAKSHAM_NAME    "Saksham OS"
+#define SAKSHAM_VERSION "0.1.0"
 
 /* ---- port I/O ---- */
 static inline void outb(uint16_t p, uint8_t v) { __asm__ volatile("outb %0,%1" :: "a"(v), "Nd"(p)); }

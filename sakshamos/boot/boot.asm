@@ -1,4 +1,4 @@
-; OmniOS boot code: Multiboot2 header, 32-bit -> 64-bit long mode switch,
+; Saksham OS boot code: Multiboot2 header, 32-bit -> 64-bit long mode switch,
 ; identity-mapped paging for the first 4 GiB, and interrupt entry stubs.
 
 section .multiboot_header

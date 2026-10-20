@@ -1,5 +1,5 @@
 /* x86-64 platform: IDT, exceptions, PIC, PIT timer, PS/2 keyboard, RTC, power. */
-#include "omnios.h"
+#include "saksham.h"
 
 typedef struct {
     uint64_t r15, r14, r13, r12, r11, r10, r9, r8, rbp, rdi, rsi, rdx, rcx, rbx, rax;

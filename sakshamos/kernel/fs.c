@@ -1,5 +1,5 @@
-/* OmniFS: an in-memory hierarchical filesystem with Unix-style ownership. */
-#include "omnios.h"
+/* SakshamFS: an in-memory hierarchical filesystem with Unix-style ownership. */
+#include "saksham.h"
 
 static fnode *root;
 
@@ -192,18 +192,18 @@ void fs_init(void)
     dir("/bin", 0, 0755);
     dir("/etc", 0, 0755);
     dir("/home", 0, 0755);
-    dir("/home/omni", 1000, 0755);
-    dir("/home/omni/Documents", 1000, 0755);
+    dir("/home/saksham", 1000, 0755);
+    dir("/home/saksham/Documents", 1000, 0755);
     dir("/root", 0, 0700);
     dir("/tmp", 0, 0777);
     file("/etc/motd", 0, 0644,
-         "Welcome to OmniOS - the operating system built from scratch.\n"
+         "Welcome to Saksham OS - the operating system built from scratch.\n"
          "Type 'help' to see every command. Type 'su' to become root.\n");
-    file("/etc/hostname", 0, 0644, "omnios\n");
+    file("/etc/hostname", 0, 0644, "sakshamos\n");
     file("/etc/os-release", 0, 0644,
-         "NAME=OmniOS\nVERSION=" OMNIOS_VERSION "\nKERNEL=omni (x86_64, from scratch)\n");
+         "NAME=Saksham OS\nVERSION=" SAKSHAM_VERSION "\nKERNEL=saksham (x86_64, from scratch)\n");
     file("/root/secret.txt", 0, 0600, "Only root can read this file.\n");
-    file("/home/omni/readme.txt", 1000, 0644,
+    file("/home/saksham/readme.txt", 1000, 0644,
          "This is your home folder. Files live in RAM in this release.\n"
          "Try: write notes.txt   then   cat notes.txt\n");
 }

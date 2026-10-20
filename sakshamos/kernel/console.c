@@ -1,5 +1,5 @@
 /* Console: VGA text mode (80x25) mirrored to the COM1 serial port. */
-#include "omnios.h"
+#include "saksham.h"
 
 #define VGA ((volatile uint16_t *)0xB8000)
 #define W 80

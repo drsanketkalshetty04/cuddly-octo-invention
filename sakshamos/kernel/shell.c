@@ -1,6 +1,6 @@
-/* omsh - the OmniOS shell: line editing, history, tab completion,
+/* sksh - the Saksham OS shell: line editing, history, tab completion,
  * redirection (> >>), command chaining (;), users, su/sudo and root. */
-#include "omnios.h"
+#include "saksham.h"
 
 #define LINE 256
 #define HIST 32
@@ -11,7 +11,7 @@ typedef struct { char name[32]; char pass[32]; uint32_t uid; char home[64]; int 
 
 static user_t users[16] = {
     { "root", "root", 0,    "/root",      1 },
-    { "omni", "omni", 1000, "/home/omni", 1 },
+    { "saksham", "saksham", 1000, "/home/saksham", 1 },
 };
 static int nusers = 2;
 static int ustack[8];       /* stack of user indices, for su / exit */
@@ -136,7 +136,7 @@ static int c_help(int argc, char **argv)
 {
     (void)argc; (void)argv;
     console_color(COL_LCYAN, COL_BLACK);
-    kprintf("OmniOS commands  (Tab completes, Up/Down = history, ; chains, > >> redirect)\n");
+    kprintf("Saksham OS commands  (Tab completes, Up/Down = history, ; chains, > >> redirect)\n");
     console_color(COL_GREY, COL_BLACK);
     for (const cmd_t *k = cmds; k->name; k++) kprintf("  %-10s %s\n", k->name, k->help);
     return 0;
@@ -472,8 +472,8 @@ static int c_passwd(int argc, char **argv)
 static int c_uname(int argc, char **argv)
 {
     if (argc > 1 && !strcmp(argv[1], "-a"))
-        kprintf("%s omnios %s x86_64 (built " __DATE__ ")\n", OMNIOS_NAME, OMNIOS_VERSION);
-    else kprintf("%s\n", OMNIOS_NAME);
+        kprintf("%s sakshamos %s x86_64 (built " __DATE__ ")\n", SAKSHAM_NAME, SAKSHAM_VERSION);
+    else kprintf("%s\n", SAKSHAM_NAME);
     return 0;
 }
 
@@ -506,29 +506,29 @@ static int c_sysinfo(int argc, char **argv)
 {
     (void)argc; (void)argv;
     static const char *logo[] = {
-        "   ____                  _ ",
-        "  / __ \\____ ___  ____  (_)",
-        " / / / / __ `__ \\/ __ \\/ / ",
-        "/ /_/ / / / / / / / / / /  ",
-        "\\____/_/ /_/ /_/_/ /_/_/   ",
-        "        O S                ",
+        " #####   ###  #   #  #####  #   #   ###  #   #     ###   #####",
+        "#       #   # #  #  #       #   #  #   # ## ##    #   # #     ",
+        " ####   ##### ###    ####   #####  ##### # # #    #   #  #### ",
+        "     #  #   # #  #       #  #   #  #   # #   #    #   #      #",
+        "#####   #   # #   # #####   #   #  #   # #   #     ###  ##### ",
     };
     char cpu[49]; cpu_brand(cpu);
     char up[64]; fmt_uptime(up, sizeof up);
     size_t bytes = 0; size_t nodes = fs_count(fs_root(), &bytes);
     char info[7][96];
-    ksnprintf(info[0], 96, "%s@omnios", me()->name);
-    ksnprintf(info[1], 96, "OS:      %s %s x86_64", OMNIOS_NAME, OMNIOS_VERSION);
-    ksnprintf(info[2], 96, "Kernel:  omni, from scratch (via %s)", boot_loader_name());
+    ksnprintf(info[0], 96, "%s@sakshamos", me()->name);
+    ksnprintf(info[1], 96, "OS:      %s %s x86_64", SAKSHAM_NAME, SAKSHAM_VERSION);
+    ksnprintf(info[2], 96, "Kernel:  saksham (from scratch)");
     ksnprintf(info[3], 96, "CPU:     %s", cpu);
     ksnprintf(info[4], 96, "Memory:  %lu KiB heap used / %lu MiB RAM", heap_used() >> 10, mem_total() >> 20);
     ksnprintf(info[5], 96, "Uptime:  %s", up);
     ksnprintf(info[6], 96, "Files:   %lu nodes, %lu bytes", (uint64_t)nodes, (uint64_t)bytes);
+    console_color(COL_LCYAN, COL_BLACK);
+    for (int i = 0; i < 5; i++) kprintf("%s\n", logo[i]);
+    kprintf("\n");
     for (int i = 0; i < 7; i++) {
-        console_color(COL_LCYAN, COL_BLACK);
-        kprintf("%-28s", i < 6 ? logo[i] : "");
         console_color(i == 0 ? COL_YELLOW : COL_GREY, COL_BLACK);
-        kprintf("%s\n", info[i]);
+        kprintf("  %s\n", info[i]);
     }
     console_color(COL_GREY, COL_BLACK);
     return 0;
@@ -726,7 +726,7 @@ static int run_one(char *line)
         while (*target == ' ') target++;
         char *e = target + strlen(target);
         while (e > target && e[-1] == ' ') *--e = 0;
-        if (!*target) { err("omsh", "missing file after >"); return 1; }
+        if (!*target) { err("sksh", "missing file after >"); return 1; }
     }
     char *argv[MAXARGS];
     int argc = tokenize(line, argv);
@@ -738,10 +738,10 @@ static int run_one(char *line)
 
     fnode *f = fs_lookup(cwd, target);
     const char *e;
-    if (f && (f->is_dir || !fs_can_write(f, uid()))) { err("omsh", "cannot write to that file"); return 1; }
-    if (!f && !(f = fs_create(cwd, target, 0, uid(), 0644, &e))) { err("omsh", e); return 1; }
+    if (f && (f->is_dir || !fs_can_write(f, uid()))) { err("sksh", "cannot write to that file"); return 1; }
+    if (!f && !(f = fs_create(cwd, target, 0, uid(), 0644, &e))) { err("sksh", e); return 1; }
     char *buf = kmalloc(CAPTURE);
-    if (!buf) { err("omsh", "out of memory"); return 1; }
+    if (!buf) { err("sksh", "out of memory"); return 1; }
     size_t len = 0;
     console_capture(buf, CAPTURE, &len);
     int rc = c->fn(argc, argv);
@@ -778,7 +778,7 @@ static void prompt(void)
     if (!strncmp(p, home, hl) && (p[hl] == 0 || p[hl] == '/')) ksnprintf(shown, sizeof shown, "~%s", p + hl);
     else strncpy0(shown, p, sizeof shown);
     console_color(uid() == 0 ? COL_LRED : COL_LGREEN, COL_BLACK);
-    kprintf("%s@omnios", me()->name);
+    kprintf("%s@sakshamos", me()->name);
     console_color(COL_GREY, COL_BLACK);
     kprintf(":");
     console_color(COL_LBLUE, COL_BLACK);
@@ -789,11 +789,11 @@ static void prompt(void)
 
 void shell_run(void)
 {
-    ustack[0] = 1;   /* boot straight into the 'omni' user */
+    ustack[0] = 1;   /* boot straight into the 'saksham' user */
     cwd = fs_lookup(NULL, me()->home);
     fnode *motd = fs_lookup(NULL, "/etc/motd");
     if (motd) console_write(motd->data, motd->size);
-    kprintf("Default accounts: omni/omni (sudo) and root/root.\n\n");
+    kprintf("Default accounts: saksham/saksham (sudo) and root/root.\n\n");
     char line[LINE], work[LINE];
     for (;;) {
         prompt();
