@@ -41,7 +41,7 @@ class VM:
             self.p.stdin.flush()
             time.sleep(0.004)
 
-    def run(self, line, prompt=r"[$#] $"):
+    def run(self, line, prompt=r"@sakshamos:[^\n]*[$#] $"):
         self.send(line)
         return self.expect(prompt)
 
@@ -81,13 +81,13 @@ def main():
 
     vm.send("su")
     vm.expect(r"Password for root: $")
-    out = vm.run("root", prompt=r"# $")
+    out = vm.run("root", prompt=r"@sakshamos:[^\n]*# $")
     check("su to root", "You are now root" in out, out)
-    out = vm.run("cat /root/secret.txt", prompt=r"# $")
+    out = vm.run("cat /root/secret.txt", prompt=r"@sakshamos:[^\n]*# $")
     check("root reads protected file", "Only root can read" in out, out)
-    out = vm.run("useradd alice pw123", prompt=r"# $")
+    out = vm.run("useradd alice pw123", prompt=r"@sakshamos:[^\n]*# $")
     check("useradd", "created user alice" in out, out)
-    out = vm.run("ls -l /home", prompt=r"# $")
+    out = vm.run("ls -l /home", prompt=r"@sakshamos:[^\n]*# $")
     check("ls -l shows owners", "alice" in out and "saksham" in out, out)
     out = vm.run("exit")
     check("exit back to saksham", "logout" in out, out)
