@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>World 3D — explore the whole Earth</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
+<style>
+  :root {
+    --panel: rgba(18, 22, 30, 0.82);
+    --panel-solid: #12161e;
+    --line: rgba(255, 255, 255, 0.12);
+    --text: #f1f4f9;
+    --muted: #9aa6b8;
+    --accent: #4da3ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #05070c; color: var(--text);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  #map { position: absolute; inset: 0; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }
+
+  /* Search */
+  #search { position: absolute; top: 14px; left: 14px; width: min(400px, calc(100vw - 76px)); z-index: 5; }
+  #searchbox { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 48px; }
+  #searchbox svg { flex: none; opacity: 0.7; }
+  #q { flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: var(--text); font-size: 16px; }
+  #q::placeholder { color: var(--muted); }
+  #q::-webkit-search-cancel-button { display: none; }
+  #clear { display: none; background: none; border: 0; color: var(--muted); font-size: 20px;
+    cursor: pointer; padding: 4px 6px; line-height: 1; }
+  #results { list-style: none; margin: 6px 0 0; padding: 6px; display: none; max-height: 55vh; overflow: auto; }
+  #results li { padding: 9px 10px; border-radius: 9px; cursor: pointer; }
+  #results li.active, #results li:hover { background: rgba(77, 163, 255, 0.18); }
+  #results .name { font-weight: 600; }
+  #results .sub { color: var(--muted); font-size: 12.5px; }
+  #results .msg { color: var(--muted); cursor: default; }
+  #results .msg:hover { background: none; }
+
+  /* Bottom bar */
+  #bar { position: absolute; left: 14px; bottom: 34px; z-index: 4; display: flex; flex-wrap: wrap;
+    gap: 8px; max-width: calc(100vw - 28px); }
+  .group { display: flex; padding: 4px; gap: 2px; }
+  .group button { background: none; border: 0; color: var(--text); padding: 8px 12px; border-radius: 10px;
+    cursor: pointer; font: inherit; white-space: nowrap; }
+  .group button:hover { background: rgba(255, 255, 255, 0.08); }
+  .group button.on { background: var(--accent); color: #04121f; font-weight: 600; }
+
+  /* Places */
+  #places { position: absolute; top: 72px; left: 14px; z-index: 1; display: flex; gap: 6px;
+    width: min(400px, calc(100vw - 76px)); overflow-x: auto; scrollbar-width: none; }
+  #places::-webkit-scrollbar { display: none; }
+  #places button { flex: none; background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    padding: 6px 11px; border-radius: 999px; cursor: pointer; font: inherit; font-size: 13px;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  #places button:hover { border-color: var(--accent); }
+
+  #toast { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 9;
+    padding: 10px 14px; display: none; max-width: 80vw; }
+
+  /* MapLibre overrides */
+  .maplibregl-popup-content { background: var(--panel-solid); color: var(--text); border-radius: 12px;
+    padding: 12px 14px; border: 1px solid var(--line); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); }
+  .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: var(--panel-solid); }
+  .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: var(--panel-solid); }
+  .maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: var(--panel-solid); }
+  .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: var(--panel-solid); }
+  .maplibregl-popup-close-button { color: var(--muted); font-size: 18px; }
+  .pop-name { font-weight: 600; font-size: 15px; margin-right: 14px; }
+  .pop-sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .pop-meta { margin-top: 6px; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+
+  @media (max-width: 600px) {
+    #bar { bottom: 70px; }
+    .group button { padding: 8px 10px; font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="search">
+  <div id="searchbox" class="panel">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+      stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <input id="q" type="search" autocomplete="off" spellcheck="false" enterkeyhint="search"
+      placeholder="Search any place, address or lat, lng" aria-label="Search places">
+    <button id="clear" aria-label="Clear search">&times;</button>
+  </div>
+  <ul id="results" class="panel" role="listbox"></ul>
+</div>
+
+<div id="places"></div>
+
+<div id="bar">
+  <div class="group panel" id="styles">
+    <button data-style="streets" class="on">Map</button>
+    <button data-style="satellite">Satellite</button>
+    <button data-style="dark">Dark</button>
+  </div>
+  <div class="group panel">
+    <button id="btn3d" class="on" title="Tilt the camera">3D view</button>
+    <button id="btnTerrain" class="on" title="Mountains and valleys in real elevation">Terrain</button>
+    <button id="btnSpin" class="on" title="Slowly rotate the globe">Spin</button>
+  </div>
+</div>
+
+<div id="toast" class="panel"></div>
+
+<script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ---- Data sources (all open, no API key needed) -------------------------
+  var VECTOR_STYLES = {
+    streets: 'https://tiles.openfreemap.org/styles/liberty',
+    dark: 'https://tiles.openfreemap.org/styles/dark'
+  };
+  var SATELLITE_TILES =
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+  var DEM_TILES = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
+  var GEOCODER = 'https://photon.komoot.io';
+  var GEOCODER_FALLBACK = 'https://nominatim.openstreetmap.org';
+
+  var PLACES = [
+    ['Mount Everest', 86.925, 27.9881, 12.2, 70, 20],
+    ['New York', -74.0113, 40.7069, 15.3, 62, 30],
+    ['Grand Canyon', -112.1129, 36.1, 12.6, 68, -30],
+    ['Tokyo', 139.7005, 35.6895, 15.2, 60, 20],
+    ['Paris', 2.2945, 48.8584, 15.6, 60, -20],
+    ['Dubai', 55.2744, 25.1972, 15, 62, 40],
+    ['Matterhorn', 7.6586, 45.9766, 12.8, 72, 160],
+    ['Mumbai', 72.8347, 18.922, 14.6, 60, 10],
+    ['Rio de Janeiro', -43.2105, -22.9519, 13.4, 65, 60],
+    ['Sydney', 151.2153, -33.8568, 15, 60, -40]
+  ];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var state = { style: 'streets', terrain: true, tilt: true, spin: true };
+  var styleCache = {};
+  var marker = null, popup = null;
+
+  if (!window.maplibregl) {
+    toast('Could not load the map library. Check your internet connection and reload.', true);
+    return;
+  }
+
+  // ---- Style building ------------------------------------------------------
+  function fetchJSON(url) {
+    return fetch(url).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + url);
+      return r.json();
+    });
+  }
+
+  function baseStyle(name) {
+    var url = VECTOR_STYLES[name === 'satellite' ? 'streets' : name];
+    if (!styleCache[url]) styleCache[url] = fetchJSON(url);
+    return styleCache[url].then(function (s) { return JSON.parse(JSON.stringify(s)); });
+  }
+
+  function buildStyle(name) {
+    return baseStyle(name).then(function (style) {
+      var dark = name !== 'streets';
+
+      if (name === 'satellite') {
+        // Imagery underneath, with roads, labels and 3D buildings from the vector map on top.
+        style.sources.satellite = {
+          type: 'raster', tiles: [SATELLITE_TILES], tileSize: 256, maxzoom: 19,
+          attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics'
+        };
+        var keep = style.layers.filter(function (l) {
+          if (l.type === 'symbol' || l.type === 'fill-extrusion') return true;
+          return l.type === 'line' &&
+            (l['source-layer'] === 'transportation' || l['source-layer'] === 'boundary');
+        });
+        keep.forEach(function (l) {
+          if (l.type === 'line' && l['source-layer'] === 'transportation') {
+            l.paint = Object.assign({}, l.paint, { 'line-opacity': 0.55 });
+          }
+          if (l.type === 'symbol') {
+            l.paint = Object.assign({}, l.paint, {
+              'text-color': '#ffffff', 'text-halo-color': 'rgba(0,0,0,0.75)', 'text-halo-width': 1.4
+            });
+          }
+        });
+        style.layers = [{ id: 'satellite', type: 'raster', source: 'satellite' }].concat(keep);
+      }
+
+      // Styles that ship without 3D buildings get them from the same building data.
+      var hasBuildings = style.layers.some(function (l) { return l.type === 'fill-extrusion'; });
+      var vectorSource = Object.keys(style.sources).filter(function (k) {
+        return style.sources[k].type === 'vector';
+      })[0];
+      if (!hasBuildings && vectorSource) {
+        style.layers.push({
+          id: 'building-3d', type: 'fill-extrusion', source: vectorSource, 'source-layer': 'building',
+          minzoom: 14,
+          paint: {
+            'fill-extrusion-color': dark ? '#2b313c' : '#d9d3c9',
+            'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 6],
+            'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+            'fill-extrusion-opacity': 0.85
+          }
+        });
+      }
+
+      // Elevation: one source drives the 3D terrain mesh, a second one the hill shading.
+      var dem = {
+        type: 'raster-dem', tiles: [DEM_TILES], encoding: 'terrarium', tileSize: 256, maxzoom: 14,
+        attribution: 'Elevation: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md">Tilezen / Mapzen</a>'
+      };
+      style.sources['terrain-dem'] = dem;
+      style.sources['hillshade-dem'] = JSON.parse(JSON.stringify(dem));
+
+      if (name !== 'satellite') {
+        var shade = {
+          id: 'hillshade', type: 'hillshade', source: 'hillshade-dem',
+          paint: {
+            'hillshade-exaggeration': dark ? 0.35 : 0.3,
+            'hillshade-shadow-color': dark ? '#000000' : '#5a5246',
+            'hillshade-highlight-color': dark ? '#3a4352' : '#ffffff',
+            'hillshade-accent-color': dark ? '#000000' : '#5a5246'
+          }
+        };
+        var at = style.layers.findIndex(function (l) { return l.type === 'line'; });
+        if (at < 0) at = style.layers.length;
+        style.layers.splice(at, 0, shade);
+      }
+
+      style.projection = { type: 'globe' };
+      style.sky = dark ? {
+        'sky-color': '#0b1a33', 'horizon-color': '#27405f', 'fog-color': '#101826',
+        'sky-horizon-blend': 0.6, 'horizon-fog-blend': 0.6, 'fog-ground-blend': 0.3,
+        'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 5, 1, 7, 0]
+      } : {
+        'sky-color': '#5fa8ee', 'horizon-color': '#dbeeff', 'fog-color': '#eef6ff',
+        'sky-horizon-blend': 0.6, 'horizon-fog-blend': 0.6, 'fog-ground-blend': 0.3,
+        'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 5, 1, 7, 0]
+      };
+      if (state.terrain) style.terrain = { source: 'terrain-dem', exaggeration: 1.3 };
+      return style;
+    });
+  }
+
+  // ---- Map -----------------------------------------------------------------
+  var startedFromLink = location.hash.length > 1;
+  var map = new maplibregl.Map({
+    container: 'map',
+    style: { version: 8, sources: {}, layers: [
+      { id: 'bg', type: 'background', paint: { 'background-color': '#05070c' } }] },
+    center: [20, 22], zoom: window.innerWidth < 600 ? 1.2 : 2.1, pitch: 0,
+    maxPitch: 85, hash: true, attributionControl: false
+  });
+  window.worldMap = map;
+
+  map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+  map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+  map.addControl(new maplibregl.GeolocateControl({
+    positionOptions: { enableHighAccuracy: true }, trackUserLocation: true }), 'top-right');
+  map.addControl(new maplibregl.FullscreenControl(), 'top-right');
+  map.addControl(new maplibregl.ScaleControl({ maxWidth: 110 }), 'bottom-right');
+
+  function applyStyle(name) {
+    state.style = name;
+    document.querySelectorAll('#styles button').forEach(function (b) {
+      b.classList.toggle('on', b.dataset.style === name);
+    });
+    return buildStyle(name).then(function (style) {
+      if (state.style === name) map.setStyle(style, { diff: false });
+    }).catch(function (err) {
+      console.error(err);
+      toast('Could not load map data. Check your internet connection and reload.', true);
+    });
+  }
+  applyStyle('streets');
+
+  document.querySelectorAll('#styles button').forEach(function (b) {
+    b.addEventListener('click', function () { applyStyle(b.dataset.style); });
+  });
+
+  // ---- 3D / terrain / spin toggles ----------------------------------------
+  $('btn3d').addEventListener('click', function () {
+    state.tilt = !state.tilt;
+    this.classList.toggle('on', state.tilt);
+    map.easeTo({ pitch: state.tilt ? 60 : 0, bearing: state.tilt ? map.getBearing() : 0, duration: 900,
+      freezeElevation: true });
+  });
+
+  $('btnTerrain').addEventListener('click', function () {
+    state.terrain = !state.terrain;
+    this.classList.toggle('on', state.terrain);
+    map.setTerrain(state.terrain ? { source: 'terrain-dem', exaggeration: 1.3 } : null);
+  });
+
+  function setSpin(on) {
+    state.spin = on;
+    $('btnSpin').classList.toggle('on', on);
+    if (on) spinStep(); else map.stop();
+  }
+  function spinStep() {
+    if (!state.spin || map.getZoom() > 4.5) return;
+    var c = map.getCenter();
+    map.easeTo({ center: [c.lng + 8, c.lat], duration: 1200, easing: function (t) { return t; },
+      freezeElevation: true },
+      { spin: true });
+  }
+  map.on('moveend', function (e) { if (e.spin) spinStep(); });
+  $('btnSpin').addEventListener('click', function () {
+    if (!state.spin && map.getZoom() > 4.5) {
+      map.flyTo({ zoom: 1.8, pitch: 0, bearing: 0, duration: 2500, freezeElevation: true });
+      map.once('moveend', function () { setSpin(true); });
+      return;
+    }
+    setSpin(!state.spin);
+  });
+  ['mousedown', 'touchstart', 'wheel', 'keydown'].forEach(function (ev) {
+    $('map').addEventListener(ev, function () { if (state.spin) setSpin(false); }, { passive: true });
+  });
+  if (startedFromLink) setSpin(false); else map.once('load', spinStep);
+
+  // ---- Flying --------------------------------------------------------------
+  function flyTo(opts) {
+    setSpin(false);
+    var pitch = state.tilt ? (opts.pitch == null ? 60 : opts.pitch) : 0;
+    map.flyTo({
+      center: opts.center, zoom: opts.zoom, pitch: pitch, bearing: state.tilt ? (opts.bearing || 0) : 0,
+      speed: 1.1, curve: 1.5, maxDuration: 9000, essential: true,
+      // Re-clamp the camera to the ground when the flight ends; without this it can finish
+      // below the terrain surface when flying from the globe into high mountains.
+      freezeElevation: true
+    });
+  }
+
+  PLACES.forEach(function (p) {
+    var b = document.createElement('button');
+    b.textContent = p[0];
+    b.addEventListener('click', function () {
+      flyTo({ center: [p[1], p[2]], zoom: p[3], pitch: p[4], bearing: p[5] });
+    });
+    $('places').appendChild(b);
+  });
+
+  function showPlace(lngLat, title, subtitle) {
+    if (marker) marker.remove();
+    if (popup) popup.remove();
+    marker = new maplibregl.Marker({ color: '#ff4d5e' }).setLngLat(lngLat).addTo(map);
+    popup = new maplibregl.Popup({ offset: 36, maxWidth: '300px' }).setLngLat(lngLat);
+    var box = document.createElement('div');
+    var n = document.createElement('div'); n.className = 'pop-name'; n.textContent = title || 'Dropped pin';
+    box.appendChild(n);
+    if (subtitle) {
+      var s = document.createElement('div'); s.className = 'pop-sub'; s.textContent = subtitle;
+      box.appendChild(s);
+    }
+    var m = document.createElement('div'); m.className = 'pop-meta';
+    m.textContent = formatLngLat(lngLat);
+    box.appendChild(m);
+    popup.setDOMContent(box).addTo(map);
+    popup.on('close', function () { if (marker) { marker.remove(); marker = null; } });
+  }
+
+  // The ground height under the pin changes as terrain loads, so re-anchor it once things settle.
+  function reanchor() {
+    if (marker) marker.setLngLat(marker.getLngLat());
+    if (popup && popup.isOpen()) popup.setLngLat(popup.getLngLat());
+  }
+  map.on('moveend', reanchor);
+  map.on('idle', reanchor);
+
+  function formatLngLat(ll) {
+    var lng = ll.lng !== undefined ? ll.lng : ll[0], lat = ll.lat !== undefined ? ll.lat : ll[1];
+    return Math.abs(lat).toFixed(5) + '° ' + (lat >= 0 ? 'N' : 'S') + ', ' +
+      Math.abs(lng).toFixed(5) + '° ' + (lng >= 0 ? 'E' : 'W');
+  }
+
+  // ---- Geocoding -----------------------------------------------------------
+  function describe(p) {
+    var name = p.name || [p.housenumber, p.street].filter(Boolean).join(' ') || p.city || p.country || 'Unnamed place';
+    var parts = [];
+    if (p.name && p.street) parts.push([p.housenumber, p.street].filter(Boolean).join(' '));
+    [p.district, p.city, p.county, p.state, p.country].forEach(function (x) {
+      if (x && x !== name && parts.indexOf(x) < 0) parts.push(x);
+    });
+    return { name: name, sub: parts.join(', ') };
+  }
+
+  function zoomForType(p) {
+    var t = p.type || p.osm_value;
+    return ({ country: 4.5, state: 6.5, county: 9, city: 11.5, district: 13, locality: 13.5,
+      street: 15.8, house: 16.2 })[t] || 15.5;
+  }
+
+  function searchPhoton(q, signal) {
+    var c = map.getCenter();
+    var url = GEOCODER + '/api/?limit=7&lang=en&q=' + encodeURIComponent(q);
+    if (map.getZoom() > 5) url += '&lat=' + c.lat.toFixed(4) + '&lon=' + c.lng.toFixed(4);
+    return fetch(url, { signal: signal }).then(function (r) {
+      if (!r.ok) throw new Error('geocoder ' + r.status);
+      return r.json();
+    }).then(function (j) {
+      return (j.features || []).map(function (f) {
+        var d = describe(f.properties), e = f.properties.extent;
+        return { name: d.name, sub: d.sub, center: f.geometry.coordinates,
+          bounds: e ? [[e[0], e[3]], [e[2], e[1]]] : null, zoom: zoomForType(f.properties) };
+      });
+    });
+  }
+
+  function searchNominatim(q, signal) {
+    var url = GEOCODER_FALLBACK + '/search?format=jsonv2&limit=7&accept-language=en&q=' + encodeURIComponent(q);
+    return fetch(url, { signal: signal }).then(function (r) {
+      if (!r.ok) throw new Error('geocoder ' + r.status);
+      return r.json();
+    }).then(function (rows) {
+      return rows.map(function (r) {
+        var bits = r.display_name.split(', '), b = r.boundingbox;
+        return { name: r.name || bits[0], sub: bits.slice(1).join(', '), center: [+r.lon, +r.lat],
+          bounds: b ? [[+b[2], +b[0]], [+b[3], +b[1]]] : null, zoom: 15.5 };
+      });
+    });
+  }
+
+  function search(q, signal) {
+    return searchPhoton(q, signal).catch(function (err) {
+      if (err.name === 'AbortError') throw err;
+      return searchNominatim(q, signal);
+    });
+  }
+
+  function parseCoords(q) {
+    var m = q.trim().match(/^(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)$/);
+    if (!m) return null;
+    var lat = +m[1], lng = +m[2];
+    if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    return { name: formatLngLat([lng, lat]), sub: 'Coordinates', center: [lng, lat], bounds: null, zoom: 14 };
+  }
+
+  function reverse(lngLat) {
+    return fetch(GEOCODER + '/reverse?lang=en&lon=' + lngLat.lng + '&lat=' + lngLat.lat)
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { return j && j.features && j.features[0] ? describe(j.features[0].properties) : null; })
+      .catch(function () { return null; });
+  }
+
+  // ---- Search UI -----------------------------------------------------------
+  var input = $('q'), list = $('results'), clearBtn = $('clear');
+  var items = [], active = -1, pending = null, timer = null;
+
+  function render(msg) {
+    list.innerHTML = '';
+    if (msg) {
+      var li = document.createElement('li'); li.className = 'msg'; li.textContent = msg; list.appendChild(li);
+    }
+    items.forEach(function (it, i) {
+      var li = document.createElement('li');
+      li.setAttribute('role', 'option');
+      if (i === active) li.className = 'active';
+      var n = document.createElement('div'); n.className = 'name'; n.textContent = it.name; li.appendChild(n);
+      if (it.sub) { var s = document.createElement('div'); s.className = 'sub'; s.textContent = it.sub; li.appendChild(s); }
+      li.addEventListener('mousedown', function (e) { e.preventDefault(); choose(i); });
+      list.appendChild(li);
+    });
+    list.style.display = (msg || items.length) ? 'block' : 'none';
+  }
+
+  function runSearch(q, thenChooseFirst) {
+    if (pending) pending.abort();
+    q = q.trim();
+    if (q.length < 2) { items = []; active = -1; render(); return; }
+    var coords = parseCoords(q);
+    if (coords) { items = [coords]; active = 0; render(); if (thenChooseFirst) choose(0); return; }
+    pending = new AbortController();
+    var ctl = pending;
+    if (thenChooseFirst) { items = []; render('Searching…'); }
+    search(q, ctl.signal).then(function (found) {
+      if (ctl.signal.aborted) return;
+      var seen = {};
+      found = found.filter(function (it) {
+        var key = it.name + '|' + it.sub;
+        if (seen[key]) return false;
+        seen[key] = true;
+        return true;
+      });
+      items = found; active = found.length ? 0 : -1;
+      render(found.length ? null : 'No places found for “' + q + '”');
+      if (thenChooseFirst && found.length) choose(0);
+    }).catch(function (err) {
+      if (err.name === 'AbortError') return;
+      items = []; render('Search is unavailable right now. Please try again.');
+    });
+  }
+
+  function choose(i) {
+    var it = items[i];
+    if (!it) return;
+    input.value = it.name;
+    clearBtn.style.display = 'block';
+    items = []; active = -1; render();
+    input.blur();
+    var zoom = it.zoom;
+    if (it.bounds) {
+      var cam = map.cameraForBounds(it.bounds, { padding: 60, maxZoom: 16.2 });
+      if (cam && isFinite(cam.zoom)) zoom = cam.zoom;
+    }
+    flyTo({ center: it.center, zoom: zoom, bearing: zoom > 12 ? -20 : 0 });
+    showPlace(it.center, it.name, it.sub);
+  }
+
+  input.addEventListener('input', function () {
+    clearBtn.style.display = input.value ? 'block' : 'none';
+    clearTimeout(timer);
+    timer = setTimeout(function () { runSearch(input.value, false); }, 280);
+  });
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!items.length) return;
+      e.preventDefault();
+      active = (active + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      render();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      clearTimeout(timer);
+      if (items.length && active >= 0) choose(active); else runSearch(input.value, true);
+    } else if (e.key === 'Escape') {
+      items = []; render(); input.blur();
+    }
+  });
+  input.addEventListener('focus', function () { if (items.length) render(); });
+  input.addEventListener('blur', function () { setTimeout(function () { list.style.display = 'none'; }, 120); });
+  clearBtn.addEventListener('click', function () {
+    input.value = ''; clearBtn.style.display = 'none'; items = []; render();
+    if (popup) popup.remove();
+    input.focus();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === '/' && document.activeElement !== input) { e.preventDefault(); input.focus(); }
+  });
+
+  // ---- Click anywhere to identify it ---------------------------------------
+  map.on('click', function (e) {
+    var ll = e.lngLat;
+    showPlace(ll, 'Looking up…');
+    var mine = popup;
+    reverse(ll).then(function (d) {
+      if (popup !== mine || !mine.isOpen()) return;
+      showPlace(ll, d ? d.name : 'Dropped pin', d ? d.sub : '');
+    });
+  });
+
+  // ---- Messages -------------------------------------------------------------
+  var toastTimer = null;
+  function toast(text, sticky) {
+    var t = document.getElementById('toast');
+    t.textContent = text; t.style.display = 'block';
+    clearTimeout(toastTimer);
+    if (!sticky) toastTimer = setTimeout(function () { t.style.display = 'none'; }, 5000);
+  }
+  var warned = false;
+  map.on('error', function (e) {
+    console.warn(e && e.error ? e.error.message || e.error : e);
+    var msg = e && e.error && String(e.error.message || '');
+    if (!warned && /webgl/i.test(msg)) {
+      warned = true;
+      toast('This browser cannot show 3D maps (WebGL is turned off).', true);
+    }
+  });
+})();
+</script>
+</body>
+</html>
