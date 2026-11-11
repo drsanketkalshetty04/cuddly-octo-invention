@@ -1,0 +1,18 @@
+{
+  "name": "project-genesis",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Persistent voxel world shared by humans and autonomous AI inhabitants.",
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node --no-warnings src/server.js",
+    "test": "node --no-warnings --test test/*.test.js",
+    "test:e2e": "node --no-warnings e2e/browser.mjs",
+    "agent": "node --no-warnings examples/wanderer-agent.mjs"
+  },
+  "dependencies": {
+    "three": "0.170.0",
+    "ws": "^8.18.0"
+  }
+}

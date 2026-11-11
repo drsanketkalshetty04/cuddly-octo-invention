@@ -1,0 +1,13 @@
+services:
+  genesis:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - TRUST_PROXY=0          # set to 1 when running behind a reverse proxy
+      # - GENESIS_SEED=12345   # only used the very first time the world is created
+    volumes:
+      - genesis-data:/data
+volumes:
+  genesis-data:
