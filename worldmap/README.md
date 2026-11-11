@@ -5,7 +5,7 @@ A 3D map of the whole Earth in a single HTML file: globe view, real terrain elev
 
 ## Use it
 
-Open `index.html` in any modern browser (double-click it, or host the folder on any static
+Open `index.html` in any modern browser (double-click it, keeping the `vendor` folder beside it, or host the folder on any static
 host such as GitHub Pages). It needs an internet connection to load map data. No API key,
 no build step, no install.
 
